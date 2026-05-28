@@ -1,0 +1,13 @@
+# Python用
+__pycache__/
+*.pyc
+venv/
+
+# tempフォルダ用
+temp/*.m4a
+temp/*.mp4
+temp/*.srt
+
+# OS用
+.DS_Store
+Thumbs.db
