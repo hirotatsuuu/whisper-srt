@@ -1,4 +1,4 @@
-# Whisper 高精度 SRT 字幕生成スクリプト (Windows専用版)
+# Whisper高精度SRT字幕生成スクリプト
 
 OpenAIの文字起こしAI「Whisper」を使用し、動画編集（Premiere Pro、DaVinci Resolve等）のテロップ作成に最適化されたSRT字幕ファイルを自動生成するPythonスクリプトです。
 
@@ -20,32 +20,36 @@ OpenAIの文字起こしAI「Whisper」を使用し、動画編集（Premiere Pr
 
 ### 1. 外部ツール（ffmpeg）のインストール
 動画から音声を抽出したり、音声フォーマットを変換するために ffmpeg が必須です。Windowsの標準機能（winget）を使い、コマンドプロンプト等で以下を実行してインストールしてください。
-
+```powershell
 winget install Gyan.FFmpeg
-
+```
 ※インストール後、設定を反映させるために一度ターミナル（またはPC）を再起動してください。
 
 ### 2. 仮想環境（env）の構築と有効化
 本プロジェクト専用の独立した仮想環境を構築します。プロジェクトのルートフォルダで以下のコマンドを実行してください。
 
 #### 1. 仮想環境（./env フォルダ）の作成
+```powershell
 python -m venv env
-
+```
 #### 2. 仮想環境のアクティベート（有効化）
 #### コマンドプロンプト(cmd)の場合:
+```powershell
 env\Scripts\activate.bat
-
+```
 #### PowerShellの場合:
 #### (スクリプト実行エラーが出る場合は事前に「Set-ExecutionPolicy RemoteSigned -Scope Process」を実行してください)
+```powershell
 .\env\Scripts\Activate.ps1
+```
 
 ※アクティベートに成功すると、ターミナルの先頭に (env) と表示されます。
 
 ### 3. 依存ライブラリのインストール
 仮想環境がアクティベートされた状態で、requirements.txt を使って必要なライブラリを一括インストールします。
-
+```powershell
 pip install -r requirements.txt
-
+```
 ※初回実行時、指定したWhisperのモデル（標準では base）が自動でダウンロードされます。
 
 ---
@@ -69,9 +73,10 @@ pip install -r requirements.txt
 認識率を上げたい固有の単語やYouTubeのチャンネル名などがある場合は、ルートフォルダに dictionary.txt を作成し、1行に1単語ずつ記述してください。
 
 # 認識させたい固有の単語リスト（#で始まる行はコメントです）
+```
 おたつ
 ユーラシア大陸
-
+```
 ---
 
 ## 使い方
@@ -80,24 +85,28 @@ pip install -r requirements.txt
 
 ### 1. 基本的な実行方法（デフォルト設定）
 ./temp/test.m4a に音声ファイルを配置している場合、引数なしで実行するだけで自動的に文字起こしが始まり、同じフォルダに test.srt が出力されます。
-
+```powershell
 python src/main.py
-
+```
 ### 2. 特定の音声・動画ファイルを指定して実行
 特定のファイルパスを指定したり、文字起こし精度を上げたい場合は、引数を使って実行できます。動画ファイルを指定した場合は、自動的に同フォルダ内に音声ファイル（.m4a）を抽出してから処理を行います。
 
 # 特定の音声ファイルを指定する場合
+```powershell
 python src/main.py ./temp/audio.mp3
-
+```
 # 動画ファイルを指定して直接実行する場合
+```powershell
 python src/main.py ./temp/input_movie.mp4
-
+```
 # 高精度モデル（smallやmedium）を指定して実行する場合
+```powershell
 python src/main.py ./temp/test.m4a -m small
-
+```
 # 別の単語辞書ファイルを指定する場合
+```powershell
 python src/main.py ./temp/test.m4a -d my_dict.txt
-
+```
 #### 指定可能なWhisperモデルサイズ
 右にいくほど精度が上がりますが、処理時間（PCのスペック）を要します。
 tiny < base (デフォルト) < small < medium < large
