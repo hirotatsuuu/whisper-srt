@@ -25,7 +25,7 @@ MAX_CHAR_LEN = 20  # 1行の最大文字数。YouTubeやTikTokのテロップと
 # スクリプトが「これは動画ファイルだ」と自動判定するための拡張子リスト
 VIDEO_EXTENSIONS = [".mp4", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".webm"]
 
-# 動画ファイル（.mp4等）から音声（.m4a）を一時的に抽出した際、すべての文字起こし処理が終わった後にその音声をどうするかの設定
+# 動画ファイル（.mp4等）から音声（.m4a）を一時的に抽出した際、すべての文字起こし処理終わった後にその音声をどうするかの設定
 # False: ファイルを消さずにそのまま保存（動画編集ソフト Premiere Pro や DaVinci Resolve 等でその音声ファイルをそのまま使いたい場合に便利）
 # True : 文字起こし（SRT生成）が終わったら、抽出した臨時の .m4a ファイルを自動で削除してフォルダ内を常にクリーンに保つ
 REMOVE_TEMP_AUDIO = False
@@ -56,8 +56,9 @@ def get_unique_filepath(file_path):
 
 def load_word_dictionary(file_path):
     """外部のテキストファイル（単語辞書）から、AIに学習させるための単語リストを読み込む関数"""
-    # 指定されたパスが空文字、またはファイルが指定の場所に実在しない場合は、辞書なしと判断して空のリストを返す
+    # 指定されたパスが空文字、またはファイルが指定の場所に実在しない場合は、警告を出して空のリストを返す
     if not file_path or not os.path.exists(file_path):
+        print(f"[*] 注意: 単語辞書ファイルが見つかりません: {file_path} (辞書なしで処理を続行します)")
         return []
 
     word_dict = []  # ファイルから読み取った正常な単語たちを美しく格納するための空のリストを定義
@@ -69,9 +70,15 @@ def load_word_dictionary(file_path):
                 # 文字列が空（白文字のみの空行）ではなく、かつ先頭が「#」から始まるコメント行でもない場合のみ、有効な単語として判定
                 if word and not word.startswith("#"):
                     word_dict.append(word)  # 条件をクリアした純粋な単語だけを、単語配列の末尾にスタックする
+        
+        # 読み込みが正常に完了したことを知らせるログ（ファイル名を表示）
+        dict_filename = os.path.basename(file_path)
+        print(f"[*] 情報: 単語辞書 [{dict_filename}] を読み込みました（登録数: {len(word_dict)}語）")
+
     except Exception as e:
         # 読み込み中に万が一予期せぬエラー（権限不足など）が起きても、システム全体をクラッシュさせず、親切な警告文を出して処理を続行
-        print(f"[!] 警告: 単語辞書の読み込み中にエラーが発生しました（処理は続行します）: {e}")
+        print(f"[*] 警告: 単語辞書の読み込み中にエラーが発生しました（処理は続行します）: {e}")
+        
     return word_dict  # 構築した単語リスト（エラー時は空リスト）を返す
 
 
@@ -82,7 +89,7 @@ def format_timestamp(seconds):
     secs = int(seconds % 60)  # さらにそこから60で割った余りを計算し、「秒（Second）」の整数部分を取得
     milliseconds = int(round((seconds % 1) * 1000))  # 1秒未満の小数点以下の端数に1000を掛け、四捨五入して「ミリ秒（Millisecond）」を3桁で取得
 
-    # 💡【重要】四捨五入（round）の影響により、ミリ秒が1000（つまりジャスト1秒）に達してしまった場合の、時間がズレるのを防ぐ繰り上げ補正処理
+    # 四捨五入（round）の影響により、ミリ秒が1000（つまりジャスト1秒）に達してしまった場合の、時間がズレるのを防ぐ繰り上げ補正処理
     if milliseconds >= 1000:
         milliseconds -= 1000  # ミリ秒を0のジャストにリセット
         secs += 1  # 溢れた1秒分を、秒の桁に加算
@@ -98,7 +105,7 @@ def format_timestamp(seconds):
 
 
 def get_audio_duration(file_path):
-    """ffprobeという動画・音声解析ツールをバックグラウンドで走らせ、ファイルの総再生秒数を100%正確に取得する関数（tqdm進捗バー用）"""
+    """ffprobeという動画・音声解析ツールをバックグラウンドで走らせ、ファイルの総再生秒数を正確に取得する関数（tqdm進捗バー用）"""
     # ffprobeに渡すコマンド引数の配列。画面を汚さないようにエラーのみを出力し、フォーマット内の総持続時間（duration）だけをプレーンに取り出す設定
     cmd = [
         "ffprobe",
@@ -122,10 +129,10 @@ def get_audio_duration(file_path):
 
 
 def extract_audio_from_video(video_path, output_audio_path):
-    """ffmpegという動画処理の王様ツールを呼び出し、動画から音声ストリームだけを「超高速かつ劣化なし」で一瞬で抽出する関数"""
+    """ffmpegという動画処理ツールを呼び出し、動画から音声ストリームだけを抽出する関数"""
     print(f"[*] 動画ファイルを検出しました。音声を抽出中...: {video_path}")
 
-    # 第1作戦：再エンコード（圧縮のやり直し）をせず、動画内の音声をそのまま丸ごとコピーして別ファイルに超高速保存するコマンド
+    # 第1作戦：再エンコード（圧縮のやり直し）をせず、動画内の音声をそのまま丸ごとコピーして別ファイルに保存するコマンド
     command = [
         "ffmpeg",
         "-y",  # すでに同名の一時ファイルがあれば自動で上書きすることを許可するフラグ
@@ -133,19 +140,19 @@ def extract_audio_from_video(video_path, output_audio_path):
         video_path,  # 解析元となる動画ファイルのパス
         "-vn",  # 「Video None」の略。映像データを完全に無視し、音声データだけを抽出対象にするフラグ
         "-acodec",
-        "copy",  # 音声コーデックを「copy（そのまま複製）」に指定。CPUに負荷をかけず、100%劣化なしで一瞬で終わる理由がこれです
+        "copy",  # 音声コーデックを「copy（そのまま複製）」に指定。CPUに負荷をかけず、劣化なしで一瞬で終わる理由がこれです
         output_audio_path,  # 出力する音声ファイルのパス（.m4a）
     ]
 
     try:
         # ffmpegの大量の内部ログがターミナル画面を埋め尽くして文字起こしの邪魔をしないよう、出力をゴミ箱（DEVNULL）に捨てて非表示実行
         subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        print(f"[✓] 音声の抽出が完了しました: {output_audio_path}")
+        print(f"[*] 音声の抽出が完了しました: {output_audio_path}")
         return True
     except subprocess.CalledProcessError:
         # 動画の音声形式（特異なPCM形式など）によっては、無劣化コピー（copy）がエラーを吐いて失敗する場合があるための「第2作戦（救済措置）」
-        print("[!] 音声の無劣化抽出に失敗しました。汎用的なエンコード抽出に切り替えます...")
-        # 第2作戦のコマンド：どんな動画の音声でも強制的に美しく変換できる、超汎用的な「AAC形式」にエンコードしながら音声を取り出す設定
+        print("[[*] 音声の無劣化抽出に失敗しました。汎用的なエンコード抽出に切り替えます...")
+        # 第2作戦のコマンド：どんな動画の音声でも変換できる、汎用的な「AAC形式」にエンコードしながら音声を取り出す設定
         fallback_command = [
             "ffmpeg",
             "-y",
@@ -160,24 +167,24 @@ def extract_audio_from_video(video_path, output_audio_path):
             subprocess.run(
                 fallback_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
             )
-            print(f"[✓] 音声の抽出（再エンコード）が完了しました: {output_audio_path}")
+            print(f"[*] 音声の抽出（再エンコード）が完了しました: {output_audio_path}")
             return True
         except Exception as e:
             # 第2作戦すら失敗した場合は、ffmpegの内部エラーかファイル破損の可能性が高いため、エラーログを出して終了
             print(
-                f"エラー: ffmpegでの音声抽出に致命的な失敗をしました。ffmpegが正常にインストールされているか確認してください。 {e}"
+                f"[*] エラー: ffmpegでの音声抽出に致命的な失敗をしました。ffmpegが正常にインストールされているか確認してください。 {e}"
             )
             return False
     except FileNotFoundError:
-        # パソコンの環境変数（Path）に 'ffmpeg' 自体が登録されておらず、コマンドが見つからなかった場合の親切なエラー案内
+        # パソコンの環境変数（Path）に 'ffmpeg' 自体が登録されておらず、コマンドが見つかったかった場合の親切なエラー案内
         print(
-            "エラー: システムに 'ffmpeg' コマンドが見つかりません。READMEの手順に従って ffmpeg をインストールし、環境変数を通してください。"
+            "[*] エラー: システムに 'ffmpeg' コマンドが見つかりません。READMEの手順に従って ffmpeg をインストールし、環境変数を通してください。"
         )
         return False
 
 
 def process_segment_to_lines(segment, min_len=10, max_len=20):
-    """Whisperが解析した1つの長い発言セグメントを、指定された「10〜20文字制限」というプロ仕様のテロップルールに応じてミリ秒単位で細かく切り刻む関数"""
+    """Whisperが解析した1つの長い発言セグメントを、指定された「10〜20文字制限」というテロップルールに応じてミリ秒単位で細かく切り刻む関数"""
     words_data = []  # セグメントの内部に含まれる単語単位の「テキスト」「発話開始秒数」「発話終了秒数」を整理整頓して格納するリスト
     for w in segment.get("words", []):
         word_text = w["word"]  # Whisperが切り出した最小単位の単語（例: "こんにちは"）
@@ -233,7 +240,7 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
             while len(clean_w_text) > max_len:
                 sub_text = clean_w_text[:max_len]  # 文字列の先頭から最大文字数分（20文字）だけをスパッと抽出
                 sub_start = w_start  # この切り出し行の表示開始時間
-                # 【数式】文字数の比率に応じて、発話全体の時間を割り算（等分）し、テロップの表示時間を文字の長さに合わせて精密に伸縮させる
+                # 文字数の比率に応じて、発話全体の時間を割り算（等分）し、テロップの表示時間を文字の長さに合わせて精密に伸縮させる
                 sub_end = w_start + (w_dur * (max_len / w_len))
 
                 lines.append({"text": sub_text, "start": sub_start, "end": sub_end})  # 切り取った20文字を行リストに格納
@@ -257,23 +264,23 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
                     "start": current_line_start,
                     "end": current_line_end,
                 })
-            # 溢れてしまった新しい単語を、次の新しい行の記念すべき「最初の1文字（単語）」としてセット
+            # 溢れてしまった新しい単語を、次の新しい行の「最初の1文字（単語）」としてセット
             current_line_text = clean_w_text
             current_line_start = w_start
             current_line_end = w_end
 
-        # パターンC：足しても文字数制限（20文字）以内に安全かつ綺麗に収まる、最も一般的な場合の結合処理
+        # パターンC：足しても文字数制限（20文字）以内に収まる、最も一般的な場合の結合処理
         else:
             # まだこの行に1文字も入っていない（新しい行の書き始め）状態なら、この単語の開始時間をその行全体の「表示開始時間」としてロック
             if not current_line_text:
                 current_line_start = w_start
-            current_line_text += clean_w_text  # 既存の文字列の後ろに、今回の単語テキストをピタッと結合
+            current_line_text += clean_w_text  # 既存の文字列の後ろに、今回の単語テキストを結合
             current_line_end = w_end  # 行の「表示終了時間」を、今合流した最新の単語の終了時間へと常にアップデート
 
         # 単語の個別処理が無事に終わった際、その単語の末尾に「。」（文の終わり）が含まれていた場合の区切り執行
         if has_period:
             if current_line_text:
-                # 「。」があるということは話の句切れ目なので、文字数にまだ余裕があっても、視聴者の読みやすさのためにここで1回綺麗に改行して確定
+                # 「。」があるということは話の句切れ目なので、文字数にまだ余裕があっても、視聴者の読みやすさのためにここで改行して確定
                 lines.append({
                     "text": current_line_text,
                     "start": current_line_start,
@@ -283,7 +290,7 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
                 current_line_start = None
                 current_line_end = None
 
-    # すべての単語のパズル組み立てチェックが終わった後、確定処理されずに変数に残ってしまっている「最後の書きかけの1行」を忘れずに回収
+    # すべての単語のパズル組み立てチェックが終わった後、確定処理されずに変数に残ってしまっている「最後の書きかけの1行」を回収
     if current_line_text:
         lines.append({
             "text": current_line_text,
@@ -291,56 +298,62 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
             "end": current_line_end,
         })
 
-    return lines  # 10〜20文字制限ルールで精密に美しく切り分けられた行データの配列をすべて返す
+    return lines  # 10〜20文字制限ルールで精密に切り分けられた行データの配列をすべて返す
 
 
 def transcribe_to_custom_srt(audio_path, output_srt_path, dict_file_path=None, model_size="base"):
-    """指定された音声ファイルを読み込んでWhisperによる超高精度AI文字起こしを実行し、カスタムSRTファイルへ書き出す司令塔関数"""
+    """指定された音声ファイルを読み込んでWhisperによる文字起こしを実行し、カスタムSRTファイルへ書き出す関数"""
+    
+    # 最初に単語辞書の読み込み判定を行い、ログを出力します
+    prompt_string = ""  # Whisperの認識力を特定の専門用語にチューニングするためのプロンプト初期化文字列
+    if dict_file_path and os.path.exists(dict_file_path):
+        word_dict = load_word_dictionary(dict_file_path)
+        if word_dict:
+            # 辞書単語たちを「。」と「、」でつないで1つの文章に成形
+            prompt_string = "。" + "、".join(word_dict) + "。"
+    else:
+        # 辞書ファイルが指定されていない、または存在しない場合
+        dict_name = os.path.basename(dict_file_path) if dict_file_path else "未指定"
+        print(f"[*] 情報: 単語辞書 [{dict_name}] なしで文字起こしを実行します")
+
+    print(f"[*] 文字数制限設定: 最小 {MIN_CHAR_LEN} 文字 〜 最大 {MAX_CHAR_LEN} 文字")
     print(f"[*] モデル '{model_size}' をパソコンのメモリに読み込み中...")
 
     try:
-        model = load_model(model_size)  # オンラインからモデル（初回のみ）をダウンロードし、GPU/CPUメモリ上にセットアップ
+        model = load_model(model_size)  # モデルをダウンロードし、GPU/CPUメモリ上にセットアップ
     except MemoryError:
-        # パソコンのスペック（VRAM/RAM）が不足し、巨大なモデルを広げられなかった場合の親切なエラー対処案内
+        # パソコンのスペック（VRAM/RAM）が不足し、巨大なモデルを広げられなかった場合の案内
         print(
-            f"エラー: パソコンのメモリ（またはビデオメモリ）が不足しているため、モデル '{model_size}' を読み込めませんでした。"
+            f"[*] エラー: パソコンのメモリ（またはビデオメモリ）が不足しているため、モデル '{model_size}' を読み込めませんでした。"
         )
-        print("初期設定エリアの DEFAULT_MODEL_SIZE を 'tiny' や 'base' に下げて再度実行してみてください。")
+        print("[*] 初期設定エリアの DEFAULT_MODEL_SIZE を 'tiny' や 'base' に下げて再度実行してみてください。")
         return False
     except Exception as e:
-        print(f"エラー: Whisperモデルの読み込み中に予期せぬ重大なエラーが発生しました: {e}")
+        print(f"[*] エラー: Whisperモデルの読み込み中に予期せぬ重大なエラーが発生しました: {e}")
         return False
-
-    prompt_string = ""  # Whisperの耳（認識力）を特定の専門用語にチューニングするためのプロンプト初期化文字列
-    if dict_file_path and os.path.exists(dict_file_path):
-        word_dict = load_word_dictionary(dict_file_path)  # テキスト辞書から単語を安全に読み込み
-        if word_dict:
-            # 💡【Whisperの裏技】辞書単語たちを「。」と「、」で数珠つなぎにして1つのフェイク文章に成形。これがAIに最も強力に単語を学習させる構造
-            prompt_string = "。" + "、".join(word_dict) + "。"
-            print(f"[*] 【辞書適用】'{dict_file_path}' から計 {len(word_dict)} 個の専門単語を読み込み、AIに注入しました")
 
     print(f"[*] 音声の解析準備が整いました。文字起こしを開始します: {audio_path}")
 
-    # 進捗バーのMAX値を決めるため、事前に関数を使って動画・音声の「総再生秒数」を正確に取得
+    # 進捗バーのMAX値を決めるため、事前に関数を使って動画・音声の「総再生秒数」を取得
     total_duration = get_audio_duration(audio_path)
 
     try:
-        # tqdm を初期化。全体の秒数をゴール（total）に設定し、ターミナルの横幅いっぱいにフィット（dynamic_ncols=True）させる
+        # tqdm を初期化。全体の秒数をゴール（total）に設定し、ターミナルの横幅にフィットさせる
         pbar = tqdm(
-            total=total_duration, desc="文字起こし進行状況", unit="秒", dynamic_ncols=True
+            total=total_duration, desc="[*] 文字起こし進行状況", unit="秒", dynamic_ncols=True
         )
 
-        # 🚀 Whisperによる音声解析のコア（心臓部）処理を実行
+        # Whisperによる音声解析のコア処理を実行
         result = model.transcribe(
             audio_path,
-            verbose=None,  # ターミナルへの進捗テキストの標準出力をオフ（None）にし、処理速度の低下を防ぐとともに画面崩れを防止
-            fp16=False,  # グラフィックボード（GPU）が非搭載の一般的なCPUパソコン環境でも100%エラーを出さずに安全に動かすため、32bit演算を強制
-            initial_prompt=prompt_string,  # 先ほど成形したプロンプト用の単語塊をAIの脳内に注入し、誤認識率を劇的に低下させる
-            language="ja",  # 言語を「日本語（Japanese）」に完全固定。これにより、喋り始めの無音部分で英語や中国語に誤判定される現象を完全ガード
-            word_timestamps=True,  # 💡ミリ秒単位での10〜20文字分割を行うための必須フラグ。単語ごとの「一音一音の正確な時間データ」をAIに算出させます
+            verbose=None,  # ターミナルへの進捗テキストの標準出力をオフにし、画面崩れを防止
+            fp16=False,  # グラフィックボード（GPU）が非搭載の環境でも安全に動かすため、32bit演算を強制
+            initial_prompt=prompt_string,  # 先ほど成形したプロンプト用の単語塊をAIに注入し、誤認識率を低下させる
+            language="ja",  # 言語を「日本語（Japanese）」に固定
+            word_timestamps=True,  # ミリ秒単位での10〜20文字分割を行うための必須フラグ
         )
 
-        # 解析が100%無事に終わったら、進捗プログレスバーを右端（100%）まで綺麗に到達させてアニメーションを美しく終了
+        # 解析が終わったら、進捗プログレスバーを右端（100%）まで到達させて終了
         if total_duration:
             pbar.update(total_duration)
         pbar.close()
@@ -348,59 +361,59 @@ def transcribe_to_custom_srt(audio_path, output_srt_path, dict_file_path=None, m
     except RuntimeError as e:
         # ファイルの破損や、音声フォーマットが壊れていてデコードできなかった場合の例外キャッチ
         print(
-            f"エラー: 文字起こし処理中にAIが内部エラーを起こしました（音声ファイルが破損している可能性があります）: {e}"
+            f"[*] エラー: 文字起こし処理中にAIが内部エラーを起こしました（音声ファイルが破損している可能性があります）: {e}"
         )
         return False
     except Exception as e:
-        print(f"エラー: 処理中に予期せぬエラーが発生しました: {e}")
+        print(f"[*] エラー: 処理中に予期せぬエラーが発生しました: {e}")
         return False
 
     print("[*] 解析成功。SRT（字幕ファイル）を構築中...")
     try:
-        srt_index = 1  # SRT字幕ブロック（1、2、3...と上から順に表示される番号）の初期インデックス
-        # 指定された出力パスで、文字コードUTF-8（WindowsとMacの両方で文字化けしない標準規格）でファイルを作成
+        srt_index = 1  # SRT字幕ブロックの初期インデックス
+        # 指定された出力パスで、文字コードUTF-8でファイルを作成
         with open(output_srt_path, "w", encoding="utf-8") as f:
             # AIが解析した全ての「発言ブロック（セグメント）」を、時系列順に1つずつ取り出す
             for segment in result["segments"]:
-                # 1つの長い発言を、先ほど設計した「10〜20文字制限・読句点消去」の自前ルール関数に通してバラバラの短い行に分解
+                # 1つの長い発言を、先ほど設計した「10〜20文字制限・読句点消去」のルール関数に通して分解
                 split_lines = process_segment_to_lines(
                     segment, min_len=MIN_CHAR_LEN, max_len=MAX_CHAR_LEN
                 )
                 for line_data in split_lines:
-                    line_text = line_data["text"].strip()  # 行の前後に不要なスペースが入り込んでいた場合は綺麗に掃除
-                    if not line_text:  # 中身が完全に空っぽ（無音やノイズ等で文字が無かった場合）の行は、ファイル破壊を防ぐためスキップ
+                    line_text = line_data["text"].strip()  # 行の前後に不要なスペースが入り込んでいた場合は掃除
+                    if not line_text:  # 中身が完全に空っぽの行はスキップ
                         continue
 
                     line_start = line_data["start"]  # 綺麗に切り分けられたその行の「表示開始秒数」
                     line_end = line_data["end"]  # 綺麗に切り分けられたその行の「表示終了秒数」
 
-                    # 🎬 世界標準のSRT字幕ファイルフォーマットの規約に1ミリ秒の狂いもなく従ってテキストをファイルに書き出し
-                    f.write(f"{srt_index}\n")  # 1行目：字幕の通し番号（連番）
+                    # SRT字幕ファイルフォーマットの規約に従ってテキストをファイルに書き出し
+                    f.write(f"{srt_index}\n")  # 1行目：字幕の通し番号
                     # 2行目：タイムスタンプ矢印（例：00:01:20,500 --> 00:01:23,120）
                     f.write(
                         f"{format_timestamp(line_start)} --> {format_timestamp(line_end)}\n"
                     )
-                    f.write(f"{line_text}\n\n")  # 3行目：画面に映すテロップ文字列 ＋ 次の字幕ブロックと区別するための「必ず必要な空行」
+                    f.write(f"{line_text}\n\n")  # 3行目：画面に映すテロップ文字列 ＋ 次の字幕ブロックと区別するための空行
 
                     srt_index += 1  # 次のテロップブロックのために、インデックス番号を1つカウントアップ
-        print(f"[✓] 字幕作成がすべて正常に完了しました！ 保存先を確認してください: {output_srt_path}")
+        print(f"[*] 完成: 字幕作成がすべて正常に完了しました！ 保存先を確認してください: {output_srt_path}")
         return True
     except IOError as e:
         # 字幕ファイルをテキストエディタや動画編集ソフトで開いたままスクリプトを実行し、書き込みロックがかかっていた場合などのエラー回避
         print(
-            f"エラー: SRTファイルの書き込みに失敗しました（保存先のファイルが別のソフトで開いたままになっていませんか？）: {e}"
+            f"[*] エラー: SRTファイルの書き込みに失敗しました（保存先のファイルが別のソフトで開いたままになっていませんか？）: {e}"
         )
         return False
 
 
 def main():
-    """プログラムが起動した際に最初に呼び出される、全体の流れを統括するエントリーポイント関数"""
-    # 引数を受け取るための解析オブジェクト（パーサー）を初期化・準備
+    """プログラムが起動した際に最初に呼び出される、全体の流れを統括するメイン関数"""
+    # 引数を受け取るための解析オブジェクト（パーサー）を初期化
     parser = argparse.ArgumentParser(
-        description="動画または音声ファイルから10〜20文字に最適化されたプロ仕様のSRT字幕を出力するスクリプト"
+        description="動画または音声ファイルから10〜20文字に最適化されたSRT字幕を出力するスクリプト"
     )
 
-    # 3つの重要な引数を定義（ユーザーが指定しなかった場合は、ファイル上部の初期設定エリアで決めたデフォルト値が自動配備される）
+    # 3つの重要な引数を定義
     parser.add_argument(
         "input_file", nargs="?", default=DEFAULT_AUDIO_FILE, help="入力ファイル（動画または音声）のパス"
     )
@@ -409,40 +422,40 @@ def main():
 
     args = parser.parse_args()  # コマンドラインから実際に渡された引数（またはデフォルト値）を確定させて変数にバインド
 
-    # 指定された入力ファイル（動画・音声）が、本当にPC内に実在するかを厳しくチェック。存在しなければ即座にエラー終了
+    # 指定された入力ファイルが、本当にPC内に実在するかをチェック。存在しなければ終了
     if not os.path.exists(args.input_file):
-        print(f"エラー: 指定された入力ファイルが見つかりません。パスが正しいか確認してください: {args.input_file}")
+        print(f"[*] エラー: 指定された入力ファイルが見つかりません。パスが正しいか確認してください: {args.input_file}")
         sys.exit(1)
 
-    # スクリプト全体の処理に「何秒かかったか」を後で100%正確に割り出すため、スタート時点の超精密クロック時間を確保
+    # スクリプト全体の処理にかかった時間を割り出すため、スタート時点の時間を確保
     start_time = time.perf_counter()
 
-    # 入力ファイルパスから「ドットより前の名前の部分」と「.mp4 などの拡張子の部分」を切り分ける
+    # 入力ファイルパスから「ドットより前の名前の部分」と「拡張子の部分」を切り分ける
     base_path, ext = os.path.splitext(args.input_file)
-    ext_lower = ext.lower()  # ユーザーが「.MP4」などの大文字で入力した場合の判定ミスを防ぐため、強制的に小文字の「.mp4」に統一
+    ext_lower = ext.lower()  # 大文字で入力した場合の判定ミスを防ぐため、強制的に小文字に統一
 
-    # 出力するSRTファイルの名前を定義（例: test.mp4 ➔ test.srt）
+    # 出力するSRTファイルの名前を定義
     raw_srt_path = base_path + ".srt"
-    # すでに同名のSRTが存在した場合に備え、上書き防止関数を通してユニークなパス（例: test_1.srt）を自動計算
+    # すでに同名のSRTが存在した場合に備え、上書き防止関数を通してユニークなパスを自動計算
     output_srt_path = get_unique_filepath(raw_srt_path)
 
-    target_audio_file = args.input_file  # Whisperに最終的に流し込むためのファイルパスを入れる変数（デフォルトはそのままのパス）
+    target_audio_file = args.input_file  # Whisperに最終的に流し込むためのファイルパスを入れる変数
     is_video_input = (
         ext_lower in VIDEO_EXTENSIONS
-    )  # 入力された拡張子が動画のリスト（.mp4等）に含まれているかどうかの真偽値フラグ（True/False）
+    )  # 入力された拡張子が動画のリストに含まれているかどうかの真偽値フラグ
 
-    # 💡 もし入力されたファイルが動画だった場合の、音声事前抽出の分岐処理
+    # もし入力されたファイルが動画だった場合の、音声事前抽出の分岐処理
     if is_video_input:
         # 動画と同じ名前の音声ファイル（.m4a）の出力先を計算し、重複防止をかける
         raw_audio_path = base_path + ".m4a"
         extracted_audio_path = get_unique_filepath(raw_audio_path)
 
-        # 動画から音声だけを抜き出す ffmpeg 連携関数を実行。もし致命的なエラー（ffmpeg未インストール等）で失敗したらその場で即座に処理中断
+        # 動画から音声だけを抜き出す ffmpeg 連携関数を実行
         success = extract_audio_from_video(args.input_file, extracted_audio_path)
         if not success:
-            print("エラー: 動画からの音声抽出に失敗したため、以降の文字起こし処理を中断します。")
+            print("[*] エラー: 動画からの音声抽出に失敗したため、以降の文字起こし処理を中断します。")
             sys.exit(1)
-        target_audio_file = extracted_audio_path  # Whisperの解析対象を、動画ファイルから「今切り出したばかりの音声ファイルパス」へスイッチ
+        target_audio_file = extracted_audio_path  # Whisperの解析対象を、動画ファイルから抽出した音声ファイルパスへスイッチ
 
     # メインの文字起こし＆SRTファイル自動書き出し関数をトリガー
     success = transcribe_to_custom_srt(
@@ -452,29 +465,29 @@ def main():
         model_size=args.model,
     )
 
-    # 入力が動画であり、かつ初期設定エリアの「一時音声削除フラグ（REMOVE_TEMP_AUDIO）」がTrueに設定されていた場合のクリーンアップ処理
+    # 入力が動画であり、かつ一時音声削除フラグがTrueに設定されていた場合のクリーンアップ処理
     if is_video_input and REMOVE_TEMP_AUDIO:
         try:
             if os.path.exists(target_audio_file):
-                os.remove(target_audio_file)  # 用済みとなった臨時の音声ファイル（.m4a）をPCから自動削除
+                os.remove(target_audio_file)  # 用済みとなった臨時の音声ファイルを自動削除
                 print(f"[*] 一時音声ファイルを自動削除し、フォルダ内をクリーンにしました: {target_audio_file}")
         except Exception as e:
-            # 削除に失敗しても文字起こし自体は成功しているので、警告だけ出して処理をそのまま綺麗に進める設定
-            print(f"[!] 警告: 一時音声ファイルの自動削除中にエラーが発生しました（処理は正常終了しています）: {e}")
+            # 削除に失敗しても文字起こし自体は成功しているので、警告だけ出して終了
+            print(f"[*] 警告: 一時音声ファイルの自動削除中にエラーが発生しました（処理は正常終了しています）: {e}")
 
     # 文字起こしの最中にAIエラーやシステムエラーで失敗フラグが立っていた場合、エラー終了コード1を投げて終了
     if not success:
-        print("エラー: 文字起こし処理が正常に完了しませんでした。上のエラーログを確認してください。")
+        print("[*] エラー: 文字起こし処理が正常に完了しませんでした。上のエラーログを確認してください。")
         sys.exit(1)
 
-    # 処理がすべて大成功を収めたら、終了時の精密クロック時間を取得
+    # 処理がすべて成功を収めたら、終了時の時間を取得
     end_time = time.perf_counter()
-    # 終了時間から開始時間を引き算し、全工程にかかった正確な時間を小数点2桁の美しいフォーマットでターミナルに出力して完了
-    print("処理時間(秒数):", "{:.2f}".format((end_time - start_time)))
+    # 終了時間から開始時間を引き算し、全工程にかかった正確な時間を小数点2桁のフォーマットでターミナルに出力して完了
+    print("[*] 処理時間(秒数):", "{:.2f}".format((end_time - start_time)))
 
 
 if __name__ == "__main__":
     """このスクリプトファイルが他のファイルからパーツとして import されたのではなく、
-    コマンドラインから直接主役として実行された場合（uv run main.py等）にのみ、メイン関数を起動するPythonの約束事
+    コマンドラインから直接実行された場合にのみ、メイン関数を起動するPythonの約束事
     """
     main()
