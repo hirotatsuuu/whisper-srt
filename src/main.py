@@ -15,7 +15,7 @@ parser = budoux.load_default_japanese_parser()
 # =====================================================================
 DEFAULT_AUDIO_FILE = "./data/test.m4a"   # 引数なしで実行した際に自動で読み込まれる既定のファイル
 DEFAULT_DICT_FILE  = "dictionary.txt"    # 優先的に認識させたい固有名詞・専門用語を並べたテキストファイル
-DEFAULT_MODEL_SIZE = "base"             # 使用するWhisperのモデルサイズ（tiny/base/small/medium/large）
+DEFAULT_MODEL_SIZE = "base"              # 使用するWhisperのモデルサイズ（tiny/base/small/medium/large）
 
 # 字幕（テロップ）として画面に表示させる際の文字数制限
 MIN_CHAR_LEN = 10  # 1行の最低文字数
@@ -132,7 +132,7 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
         words_data.append({
             "text": word_text,
             "start": float(w["start"]),  # 単語の発話開始時間（秒）
-            "end": float(w["end"])        # 単語の発話終了時間（秒）
+            "end": float(w["end"])       # 単語の発話終了時間（秒）
         })
         
     lines = []                 # 最終的にSRTに書き出すため、文字数調整が完了した行データを詰め込むリスト
@@ -166,18 +166,18 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
                 lines.append({"text": current_line_text, "start": current_line_start, "end": current_line_end})
                 current_line_text = ""
             
-            w_dur = w_end - w_start  # 巨大な単語全体にかかっている発話時間（秒数）
+            w_dur = w_end - w_start   # 巨大な単語全体にかかっている発話時間（秒数）
             w_len = len(clean_w_text) # 巨大な単語の合計文字数
             
             # 最大文字数を超えている間、頭から20文字ずつ強引に切り取って分割していくループ
             while len(clean_w_text) > max_len:
-                sub_text = clean_w_text[:max_len] # 頭から最大文字数分（20文字）を抽出
+                sub_text = clean_w_text[:max_len]  # 頭から最大文字数分（20文字）を抽出
                 sub_start = w_start                # 切り出し行の開始時間
                 # 文字数の比率に応じて、発話時間を割り算（等分）して表示時間を伸縮させる
                 sub_end = w_start + (w_dur * (max_len / w_len))
                 
                 lines.append({"text": sub_text, "start": sub_start, "end": sub_end})
-                clean_w_text = clean_w_text[max_len:] # 処理した20文字を元の単語から削る（残りを次に回す）
+                clean_w_text = clean_w_text[max_len:]  # 処理した20文字を元の単語から削る（残りを次に回す）
                 w_start = sub_end                      # 次の切り出しの開始時間は、今の終了時間にする
             
             # 20文字ずつ切り刻んで最後に残った端数文字があれば、それを新しい行の書き出しとする
@@ -201,7 +201,7 @@ def process_segment_to_lines(segment, min_len=10, max_len=20):
             # まだ新しい行を書き始めたばかりで開始時間が未設定なら、この単語の時間を開始時間とする
             if not current_line_text:
                 current_line_start = w_start
-            current_line_text += clean_w_text  # テキストに単語を結合
+            current_line_text += clean_w_text   # テキストに単語を結合
             current_line_end = w_end            # 行の終了時間をこの単語の終了時間へ更新
             
         # 単語の処理が終わった際、そこに「。」が含まれていた場合の処理
@@ -316,7 +316,7 @@ def main():
     raw_srt_path = base_path + ".srt"
     output_srt_path = get_unique_filepath(raw_srt_path)
     
-    target_audio_file = args.input_file                    # Whisperに最終的に投入するファイルパス用の変数
+    target_audio_file = args.input_file             # Whisperに最終的に投入するファイルパス用の変数
     is_video_input = ext_lower in VIDEO_EXTENSIONS  # 入力ファイルが動画拡張子リストに含まれるかどうかの真偽値フラグ
 
     # もし入力されたのが動画ファイルだった場合の音声事前抽出処理
