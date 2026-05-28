@@ -91,31 +91,32 @@ python src/main.py
 ### 2. 特定の音声・動画ファイルを指定して実行
 特定のファイルパスを指定したり、文字起こし精度を上げたい場合は、引数を使って実行できます。動画ファイルを指定した場合は、自動的に同フォルダ内に音声ファイル（.m4a）を抽出してから処理を行います。
 
-# 特定の音声ファイルを指定する場合
+#### 特定の音声ファイルを指定する場合
 ```powershell
 python src/main.py ./data/audio.mp3
 ```
 
-# 動画ファイルを指定して直接実行する場合
+#### 動画ファイルを指定して直接実行する場合
 ```powershell
 python src/main.py ./data/input_movie.mp4
 ```
 
-# 高精度モデル（smallやmedium）を指定して実行する場合
+#### 高精度モデル（smallやmedium）を指定して実行する場合
 ```powershell
 python src/main.py ./temp/test.m4a -m small
 ```
 
-# 別の単語辞書ファイルを指定する場合
-```powershell
-python src/main.py ./temp/test.m4a -d my_dict.txt
-```
-
-#### 指定可能なWhisperモデルサイズ
+##### 指定可能なWhisperモデルサイズ
 右にいくほど精度が上がりますが、処理時間（PCのスペック）を要します。
 ```
 tiny < base (デフォルト) < small < medium < large
 ```
+
+#### 別の単語辞書ファイルを指定する場合
+```powershell
+python src/main.py ./temp/test.m4a -d my_dict.txt
+```
+
 ---
 
 ## スクリプト内の設定変更
