@@ -77,11 +77,11 @@ uv pip install -r requirements.txt
 仮想環境がアクティベートされていることを確認し、プロジェクトのルートフォルダで実行してください。
 
 ### 1. 基本的な実行方法（デフォルト設定）
-./data/test.m4a に音声ファイルを配置している場合、引数なしで実行するだけで自動的に文字起こしが始まり、同じフォルダに test.srt が出力されます。
+`./data/test.m4a` に音声ファイルを配置している場合、引数なしで実行するだけで自動的に文字起こしが始まり、同じフォルダに test.srt が出力されます。
 ```powershell
 uv run src/main.py
 ```
-※`uv runの場合は仮想環境を実行しなくてもよい
+※`uv run`の場合は仮想環境を実行しなくてもよい
 
 一般的なpythonコマンドによる実行（仮想環境をアクティブにしてください）
 ```powershell
@@ -113,8 +113,9 @@ python src/main.py ./temp/test.m4a -d my_dict.txt
 
 #### 指定可能なWhisperモデルサイズ
 右にいくほど精度が上がりますが、処理時間（PCのスペック）を要します。
+```
 tiny < base (デフォルト) < small < medium < large
-
+```
 ---
 
 ## スクリプト内の設定変更
